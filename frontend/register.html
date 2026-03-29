@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Registration System - Sign Up</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <div class="container">
+        <div class="form-container">
+            <h1>Create Your Account</h1>
+            <p class="subtitle">Join us today with complete registration</p>
+            
+            <div id="messageArea" class="message-area"></div>
+            
+            <form id="registrationForm" enctype="multipart/form-data">
+                <!-- Section 1: Basic Information -->
+                <div class="form-section">
+                    <h2>Basic Information</h2>
+                    
+                    <div class="form-group">
+                        <label for="full_name">Full Name <span class="required">*</span></label>
+                        <input type="text" id="full_name" name="full_name" placeholder="Enter your full name" required>
+                    </div>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="username">Username <span class="required">*</span></label>
+                            <input type="text" id="username" name="username" placeholder="Choose a username" required>
+                            <small class="helper-text" id="usernameStatus"></small>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="email">Email Address <span class="required">*</span></label>
+                            <input type="email" id="email" name="email" placeholder="your@email.com" required>
+                            <small class="helper-text" id="emailStatus"></small>
+                        </div>
+                    </div>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="password">Password <span class="required">*</span></label>
+                            <input type="password" id="password" name="password" placeholder="At least 6 characters" required>
+                            <small class="helper-text">Minimum 6 characters</small>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="confirm_password">Confirm Password <span class="required">*</span></label>
+                            <input type="password" id="confirm_password" name="confirm_password" placeholder="Confirm your password" required>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Section 2: Personal Details -->
+                <div class="form-section">
+                    <h2>Personal Details</h2>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="phone">Phone Number</label>
+                            <input type="tel" id="phone" name="phone" placeholder="+1234567890">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="date_of_birth">Date of Birth</label>
+                            <input type="date" id="date_of_birth" name="date_of_birth">
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Gender</label>
+                        <div class="radio-group">
+                            <label class="radio-label">
+                                <input type="radio" name="gender" value="male"> Male
+                            </label>
+                            <label class="radio-label">
+                                <input type="radio" name="gender" value="female"> Female
+                            </label>
+                            <label class="radio-label">
+                                <input type="radio" name="gender" value="other"> Other
+                            </label>
+                            <label class="radio-label">
+                                <input type="radio" name="gender" value="prefer_not"> Prefer not to say
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="country">Country</label>
+                        <select id="country" name="country">
+                            <option value="">Select your country</option>
+                            <option value="US">United States</option>
+                            <option value="UK">United Kingdom</option>
+                            <option value="Canada">Canada</option>
+                            <option value="Australia">Australia</option>
+                            <option value="Germany">Germany</option>
+                            <option value="France">France</option>
+                            <option value="Japan">Japan</option>
+                            <option value="Brazil">Brazil</option>
+                            <option value="India">India</option>
+                            <option value="Nigeria">Nigeria</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="city">City</label>
+                            <input type="text" id="city" name="city" placeholder="Your city">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="postal_code">Postal Code</label>
+                            <input type="text" id="postal_code" name="postal_code" placeholder="Postal/ZIP code">
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Section 3: Preferences (Checkboxes) -->
+                <div class="form-section">
+                    <h2>Preferences & Interests</h2>
+                    
+                    <div class="form-group">
+                        <label>Interests (Select all that apply)</label>
+                        <div class="checkbox-group">
+                            <label class="checkbox-label">
+                                <input type="checkbox" name="interests" value="technology"> Technology
+                            </label>
+                            <label class="checkbox-label">
+                                <input type="checkbox" name="interests" value="sports"> Sports
+                            </label>
+                            <label class="checkbox-label">
+                                <input type="checkbox" name="interests" value="music"> Music
+                            </label>
+                            <label class="checkbox-label">
+                                <input type="checkbox" name="interests" value="art"> Art
+                            </label>
+                            <label class="checkbox-label">
+                                <input type="checkbox" name="interests" value="travel"> Travel
+                            </label>
+                            <label class="checkbox-label">
+                                <input type="checkbox" name="interests" value="food"> Food
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="newsletter">Newsletter Subscription</label>
+                        <select id="newsletter" name="newsletter">
+                            <option value="daily">Daily Newsletter</option>
+                            <option value="weekly">Weekly Digest</option>
+                            <option value="monthly">Monthly Update</option>
+                            <option value="none">No Newsletter</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Preferred Contact Method</label>
+                        <div class="radio-group">
+                            <label class="radio-label">
+                                <input type="radio" name="contact_method" value="email"> Email
+                            </label>
+                            <label class="radio-label">
+                                <input type="radio" name="contact_method" value="phone"> Phone
+                            </label>
+                            <label class="radio-label">
+                                <input type="radio" name="contact_method" value="sms"> SMS
+                            </label>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Section 4: File Upload -->
+                <div class="form-section">
+                    <h2>Documents & Files</h2>
+                    
+                    <div class="form-group">
+                        <label for="profile_picture">Profile Picture</label>
+                        <input type="file" id="profile_picture" name="profile_picture" accept="image/*">
+                        <small class="helper-text">Upload a profile picture (JPG, PNG, GIF)</small>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="resume">Resume/CV</label>
+                        <input type="file" id="resume" name="resume" accept=".pdf,.doc,.docx">
+                        <small class="helper-text">PDF or Word document (Max 5MB)</small>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="additional_files">Additional Documents</label>
+                        <input type="file" id="additional_files" name="additional_files" multiple>
+                        <small class="helper-text">You can select multiple files</small>
+                    </div>
+                </div>
+                
+                <!-- Section 5: Dynamic Fields (can be extended) -->
+                <div class="form-section">
+                    <h2>Additional Information</h2>
+                    
+                    <div class="form-group">
+                        <label for="bio">Bio / About You</label>
+                        <textarea id="bio" name="bio" rows="4" placeholder="Tell us about yourself..."></textarea>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="website">Personal Website/Portfolio</label>
+                        <input type="url" id="website" name="website" placeholder="https://example.com">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="social_twitter">Twitter Handle</label>
+                        <input type="text" id="social_twitter" name="social_twitter" placeholder="@username">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="social_linkedin">LinkedIn Profile</label>
+                        <input type="url" id="social_linkedin" name="social_linkedin" placeholder="LinkedIn URL">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>How did you hear about us?</label>
+                        <div class="radio-group">
+                            <label class="radio-label">
+                                <input type="radio" name="referral" value="search"> Search Engine
+                            </label>
+                            <label class="radio-label">
+                                <input type="radio" name="referral" value="social"> Social Media
+                            </label>
+                            <label class="radio-label">
+                                <input type="radio" name="referral" value="friend"> Friend/Family
+                            </label>
+                            <label class="radio-label">
+                                <input type="radio" name="referral" value="ad"> Advertisement
+                            </label>
+                            <label class="radio-label">
+                                <input type="radio" name="referral" value="other"> Other
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="referral_other">If other, please specify</label>
+                        <input type="text" id="referral_other" name="referral_other" placeholder="Please specify">
+                    </div>
+                </div>
+                
+                <!-- Section 6: Terms & Conditions -->
+                <div class="form-section">
+                    <div class="form-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="terms" name="terms" required>
+                            I agree to the <a href="#" target="_blank">Terms and Conditions</a> <span class="required">*</span>
+                        </label>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="privacy" name="privacy" required>
+                            I have read and agree to the <a href="#" target="_blank">Privacy Policy</a> <span class="required">*</span>
+                        </label>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="marketing" name="marketing">
+                            I would like to receive marketing communications
+                        </label>
+                    </div>
+                </div>
+                
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-primary">Register Now</button>
+                    <button type="reset" class="btn btn-secondary">Reset Form</button>
+                </div>
+            </form>
+            
+            <div class="login-link">
+                Already have an account? <a href="/login.html">Login here</a>
+            </div>
+        </div>
+    </div>
+    
+    <script src="/js/app.js"></script>
+</body>
+</html>
