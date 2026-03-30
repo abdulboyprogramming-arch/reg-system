@@ -113,3 +113,41 @@ class PostgresDB:
 
     def get_user_by_username(self, username):
         return self.execute_query("SELECT * FROM users WHERE username = %s", (username,), fetch_one=True)
+
+    def get_user_by_id(self, user_id):
+        """Get user by ID"""
+        return self.execute_query("SELECT * FROM users WHERE id = %s", (user_id,), fetch_one=True)
+    
+    def get_all_users(self, limit=100, offset=0):
+        """Get all users with pagination"""
+        query = "SELECT id, email, username, full_name, phone, created_at, is_active, is_admin, email_verified FROM users ORDER BY id DESC LIMIT %s OFFSET %s"
+        return self.execute_query(query, (limit, offset), fetch_all=True)
+    
+    def update_user(self, user_id, updates):
+        """Update user fields dynamically"""
+        set_clause = ", ".join([f"{k} = %s" for k in updates.keys()])
+        query = f"UPDATE users SET {set_clause}, updated_at = CURRENT_TIMESTAMP WHERE id = %s RETURNING id"
+        params = list(updates.values()) + [user_id]
+        result = self.execute_query(query, params, fetch_one=True)
+        return result is not None
+    
+    def delete_user(self, user_id):
+        """Soft delete user"""
+        return self.execute_query("UPDATE users SET is_active = FALSE WHERE id = %s", (user_id,))
+    
+    def get_user_metadata(self, user_id):
+        """Get user metadata from JSONB"""
+        result = self.execute_query("SELECT metadata, preferences FROM user_metadata WHERE user_id = %s", (user_id,), fetch_one=True)
+        if result:
+            return dict(result)
+        return {"metadata": {}, "preferences": {}}
+    
+    def update_user_metadata(self, user_id, metadata_updates):
+        """Update user metadata JSONB"""
+        query = """
+            UPDATE user_metadata 
+            SET metadata = metadata || %s::jsonb, 
+                updated_at = CURRENT_TIMESTAMP 
+            WHERE user_id = %s
+        """
+        return self.execute_query(query, (json.dumps(metadata_updates), user_id))
