@@ -3,17 +3,12 @@ import http.server
 import socketserver
 import json
 import urllib.parse
-import urllib.request
-import urllib.error
 import os
 import sys
 import hashlib
 import secrets
 import datetime
 import re
-import tempfile
-import shutil
-from email.utils import formatdate
 import cgi
 import io
 
@@ -57,14 +52,13 @@ class RegistrationHandler(http.server.SimpleHTTPRequestHandler):
             '/register': self.serve_register_page,
             '/dashboard': self.serve_dashboard_page,
             '/admin': self.serve_admin_page,
-            '/verify-email': self.verify_email,
+            '/login.html': self.serve_login_page,
             '/logout': self.handle_logout,
             '/api/session': self.get_session_info,
-            # Add these to the routes dictionary
-            '/api/users': self.api_get_users,              # NEW
-            '/api/user-activity': self.api_get_user_activity,  # NEW
-            '/api/form-submissions': self.api_get_form_submissions,  # NEW
-            '/api/stats': self.api_get_stats               # NEW
+            '/api/users': self.api_get_users,
+            '/api/user-activity': self.api_get_user_activity,
+            '/api/form-submissions': self.api_get_form_submissions,
+            '/api/stats': self.api_get_stats
         }
         
         if path in routes:
@@ -83,8 +77,9 @@ class RegistrationHandler(http.server.SimpleHTTPRequestHandler):
             '/api/upload': self.api_upload,
             '/api/save-form-data': self.api_save_form_data,
             '/api/check-availability': self.api_check_availability,
-            '/api/update-user': self.api_update_user      # NEW
+            '/api/update-user': self.api_update_user
         }
+        
         if path in routes:
             routes[path]()
         else:
@@ -127,8 +122,12 @@ class RegistrationHandler(http.server.SimpleHTTPRequestHandler):
         """Serve registration page"""
         self.serve_html_file('register.html')
     
+    def serve_login_page(self):
+        """Serve login page"""
+        self.serve_html_file('login.html')
+    
     def serve_dashboard_page(self):
-        """Serve dashboard page (stub for now)"""
+        """Serve dashboard page"""
         session = self.get_session()
         if not session:
             self.send_response(302)
@@ -138,7 +137,7 @@ class RegistrationHandler(http.server.SimpleHTTPRequestHandler):
         self.serve_html_file('dashboard.html')
     
     def serve_admin_page(self):
-        """Serve admin page (stub for extensibility)"""
+        """Serve admin page"""
         session = self.get_session()
         if not session or not session.get('is_admin', False):
             self.send_response(403)
@@ -187,35 +186,41 @@ class RegistrationHandler(http.server.SimpleHTTPRequestHandler):
             form = cgi.FieldStorage(
                 fp=io.BytesIO(raw_data),
                 headers=self.headers,
-                environ={'REQUEST_METHOD': 'POST'}
+                environ={'REQUEST_METHOD': 'POST', 'CONTENT_TYPE': content_type}
             )
-            return {key: form[key].value for key in form.keys()}
+            result = {}
+            for key in form.keys():
+                result[key] = form[key].value
+            return result
         else:
             # URL-encoded form data
-            return urllib.parse.parse_qs(raw_data.decode('utf-8'))
+            parsed = urllib.parse.parse_qs(raw_data.decode('utf-8'))
+            return {k: v[0] if len(v) == 1 else v for k, v in parsed.items()}
     
     def get_session(self):
         """Retrieve session from cookie"""
         cookie_header = self.headers.get('Cookie', '')
         cookies = {}
         for cookie in cookie_header.split(';'):
+            cookie = cookie.strip()
             if '=' in cookie:
-                key, value = cookie.strip().split('=', 1)
+                key, value = cookie.split('=', 1)
                 cookies[key] = value
         
         session_token = cookies.get('session_token')
         if session_token:
-            session = self.mongo_db.get_session(session_token)
-            if session:
+            session_doc = self.mongo_db.get_session(session_token)
+            if session_doc:
                 # Also fetch user data from PostgreSQL
-                user = self.pg_db.get_user_by_id(session['user_id'])
+                user = self.pg_db.get_user_by_id(session_doc['user_id'])
                 if user:
                     return {
-                        'user_id': session['user_id'],
+                        'user_id': session_doc['user_id'],
                         'session_token': session_token,
                         'username': user['username'],
                         'email': user['email'],
-                        'is_admin': user['is_admin']
+                        'is_admin': user['is_admin'],
+                        'is_active': user['is_active']
                     }
         return None
     
@@ -242,7 +247,14 @@ class RegistrationHandler(http.server.SimpleHTTPRequestHandler):
         """API endpoint to get current session info"""
         session = self.get_session()
         if session:
-            self.send_json_response({'authenticated': True, 'user': session})
+            # Remove sensitive data
+            safe_session = {
+                'user_id': session['user_id'],
+                'username': session['username'],
+                'email': session['email'],
+                'is_admin': session['is_admin']
+            }
+            self.send_json_response({'authenticated': True, 'user': safe_session})
         else:
             self.send_json_response({'authenticated': False})
     
@@ -322,7 +334,7 @@ class RegistrationHandler(http.server.SimpleHTTPRequestHandler):
                 'password_hash': password_hash,
                 'full_name': data.get('full_name', ''),
                 'phone': data.get('phone', ''),
-                'date_of_birth': data.get('date_of_birth', None),
+                'date_of_birth': data.get('date_of_birth', None) if data.get('date_of_birth') else None,
                 'gender': data.get('gender', ''),
                 'country': data.get('country', ''),
                 'city': data.get('city', ''),
@@ -347,10 +359,10 @@ class RegistrationHandler(http.server.SimpleHTTPRequestHandler):
                 action='register',
                 ip_address=self.client_address[0],
                 user_agent=self.headers.get('User-Agent'),
-                details={'registration_data': {k: v for k, v in user_data.items() if k != 'password_hash'}}
+                details={'email': data['email'], 'username': data['username']}
             )
             
-            # Create session
+            # Create session and send response
             self.send_response(200)
             self.set_session(user_id)
             self.send_json_response({
@@ -360,42 +372,48 @@ class RegistrationHandler(http.server.SimpleHTTPRequestHandler):
             })
             
         except Exception as e:
+            import traceback
+            traceback.print_exc()
             self.send_json_response({'success': False, 'error': str(e)}, 500)
     
     def api_login(self):
         """Handle login"""
-        data = self.get_post_data()
-        username_or_email = data.get('username_or_email', '')
-        password = data.get('password', '')
-        
-        # Try to find user by email or username
-        user = self.pg_db.get_user_by_email(username_or_email)
-        if not user:
-            user = self.pg_db.get_user_by_username(username_or_email)
-        
-        if not user or not self.verify_password(password, user['password_hash']):
-            self.send_json_response({'success': False, 'error': 'Invalid credentials'}, 401)
-            return
-        
-        if not user['is_active']:
-            self.send_json_response({'success': False, 'error': 'Account is deactivated'}, 403)
-            return
-        
-        # Log login
-        self.mongo_db.log_activity(
-            user_id=user['id'],
-            action='login',
-            ip_address=self.client_address[0],
-            user_agent=self.headers.get('User-Agent')
-        )
-        
-        # Create session
-        self.set_session(user['id'])
-        self.send_json_response({
-            'success': True,
-            'message': 'Login successful',
-            'redirect': '/dashboard'
-        })
+        try:
+            data = self.get_post_data()
+            username_or_email = data.get('username_or_email', '')
+            password = data.get('password', '')
+            
+            # Try to find user by email or username
+            user = self.pg_db.get_user_by_email(username_or_email)
+            if not user:
+                user = self.pg_db.get_user_by_username(username_or_email)
+            
+            if not user or not self.verify_password(password, user['password_hash']):
+                self.send_json_response({'success': False, 'error': 'Invalid credentials'}, 401)
+                return
+            
+            if not user['is_active']:
+                self.send_json_response({'success': False, 'error': 'Account is deactivated'}, 403)
+                return
+            
+            # Log login
+            self.mongo_db.log_activity(
+                user_id=user['id'],
+                action='login',
+                ip_address=self.client_address[0],
+                user_agent=self.headers.get('User-Agent')
+            )
+            
+            # Create session
+            self.send_response(200)
+            self.set_session(user['id'])
+            self.send_json_response({
+                'success': True,
+                'message': 'Login successful',
+                'redirect': '/dashboard'
+            })
+        except Exception as e:
+            self.send_json_response({'success': False, 'error': str(e)}, 500)
     
     def api_upload(self):
         """Handle file uploads"""
@@ -450,150 +468,185 @@ class RegistrationHandler(http.server.SimpleHTTPRequestHandler):
     
     def api_save_form_data(self):
         """Save arbitrary form data to MongoDB"""
-        data = self.get_post_data()
-        submission_type = data.get('submission_type', 'generic')
-        form_data = data.get('data', {})
-        
-        session = self.get_session()
-        user_id = session['user_id'] if session else None
-        
-        submission_id = self.mongo_db.save_form_submission(submission_type, form_data, user_id)
-        
-        self.send_json_response({
-            'success': True,
-            'submission_id': str(submission_id),
-            'message': 'Form data saved successfully'
-        })
-
+        try:
+            data = self.get_post_data()
+            submission_type = data.get('submission_type', 'generic')
+            form_data = data.get('data', {})
+            
+            session = self.get_session()
+            user_id = session['user_id'] if session else None
+            
+            submission_id = self.mongo_db.save_form_submission(submission_type, form_data, user_id)
+            
+            self.send_json_response({
+                'success': True,
+                'submission_id': str(submission_id),
+                'message': 'Form data saved successfully'
+            })
+        except Exception as e:
+            self.send_json_response({'success': False, 'error': str(e)}, 500)
+    
     def api_get_users(self):
         """Admin endpoint to get all users"""
-        session = self.get_session()
-        if not session or not session.get('is_admin', False):
-            self.send_json_response({'error': 'Unauthorized'}, 403)
-            return
-        
-        limit = int(self.path.split('?')[1].split('=')[1]) if '?limit=' in self.path else 100
-        offset = int(self.path.split('?')[1].split('=')[2]) if '?offset=' in self.path else 0
-        
-        users = self.pg_db.get_all_users(limit, offset)
-        user_list = []
-        for user in users:
-            user_list.append({
-                'id': user['id'],
-                'email': user['email'],
-                'username': user['username'],
-                'full_name': user['full_name'],
-                'phone': user['phone'],
-                'created_at': str(user['created_at']),
-                'is_active': user['is_active'],
-                'is_admin': user['is_admin'],
-                'email_verified': user['email_verified']
-            })
-        
-        self.send_json_response({'users': user_list, 'count': len(user_list)})
+        try:
+            session = self.get_session()
+            if not session or not session.get('is_admin', False):
+                self.send_json_response({'error': 'Unauthorized'}, 403)
+                return
+            
+            # Parse query parameters
+            query_params = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+            limit = int(query_params.get('limit', [100])[0])
+            offset = int(query_params.get('offset', [0])[0])
+            
+            users = self.pg_db.get_all_users(limit, offset)
+            user_list = []
+            for user in users:
+                user_list.append({
+                    'id': user['id'],
+                    'email': user['email'],
+                    'username': user['username'],
+                    'full_name': user['full_name'],
+                    'phone': user['phone'],
+                    'created_at': str(user['created_at']),
+                    'is_active': user['is_active'],
+                    'is_admin': user['is_admin'],
+                    'email_verified': user['email_verified']
+                })
+            
+            self.send_json_response({'users': user_list, 'count': len(user_list)})
+        except Exception as e:
+            self.send_json_response({'error': str(e)}, 500)
     
     def api_get_user_activity(self):
         """Get user activity logs from MongoDB"""
-        session = self.get_session()
-        if not session:
-            self.send_json_response({'error': 'Unauthorized'}, 403)
-            return
-        
-        user_id = session['user_id']
-        if 'admin' in self.path and not session.get('is_admin', False):
-            # Allow admin to see other users' logs
-            params = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
-            user_id = int(params.get('user_id', [user_id])[0])
-        
-        logs = list(self.mongo_db.db.activity_logs.find({'user_id': user_id}).sort('timestamp', -1).limit(50))
-        for log in logs:
-            log['_id'] = str(log['_id'])
-            log['timestamp'] = str(log['timestamp'])
-        
-        self.send_json_response({'activity_logs': logs})
+        try:
+            session = self.get_session()
+            if not session:
+                self.send_json_response({'error': 'Unauthorized'}, 403)
+                return
+            
+            user_id = session['user_id']
+            
+            # Parse query parameters for admin override
+            query_params = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+            if session.get('is_admin', False) and 'user_id' in query_params:
+                user_id = int(query_params['user_id'][0])
+            
+            logs = list(self.mongo_db.db.activity_logs.find({'user_id': user_id}).sort('timestamp', -1).limit(50))
+            for log in logs:
+                log['_id'] = str(log['_id'])
+                log['timestamp'] = str(log['timestamp'])
+            
+            self.send_json_response({'activity_logs': logs})
+        except Exception as e:
+            self.send_json_response({'error': str(e)}, 500)
     
     def api_get_form_submissions(self):
         """Get form submissions from MongoDB"""
-        session = self.get_session()
-        if not session:
-            self.send_json_response({'error': 'Unauthorized'}, 403)
-            return
-        
-        submission_type = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query).get('type', [None])[0]
-        query = {}
-        if submission_type:
-            query['submission_type'] = submission_type
-        if not session.get('is_admin', False):
-            query['user_id'] = session['user_id']
-        
-        submissions = list(self.mongo_db.db.form_submissions.find(query).sort('submitted_at', -1).limit(100))
-        for sub in submissions:
-            sub['_id'] = str(sub['_id'])
-            sub['submitted_at'] = str(sub['submitted_at'])
-        
-        self.send_json_response({'submissions': submissions})
+        try:
+            session = self.get_session()
+            if not session:
+                self.send_json_response({'error': 'Unauthorized'}, 403)
+                return
+            
+            query_params = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+            submission_type = query_params.get('type', [None])[0]
+            
+            query = {}
+            if submission_type:
+                query['submission_type'] = submission_type
+            if not session.get('is_admin', False):
+                query['user_id'] = session['user_id']
+            
+            submissions = list(self.mongo_db.db.form_submissions.find(query).sort('submitted_at', -1).limit(100))
+            for sub in submissions:
+                sub['_id'] = str(sub['_id'])
+                sub['submitted_at'] = str(sub['submitted_at'])
+            
+            self.send_json_response({'submissions': submissions})
+        except Exception as e:
+            self.send_json_response({'error': str(e)}, 500)
     
     def api_update_user(self):
         """Admin endpoint to update user"""
-        session = self.get_session()
-        if not session or not session.get('is_admin', False):
-            self.send_json_response({'error': 'Unauthorized'}, 403)
-            return
-        
-        data = self.get_post_data()
-        user_id = data.get('user_id')
-        updates = data.get('updates', {})
-        
-        # Remove sensitive fields that shouldn't be updated directly
-        forbidden = ['id', 'password_hash', 'created_at']
-        for field in forbidden:
-            updates.pop(field, None)
-        
-        if self.pg_db.update_user(user_id, updates):
-            self.mongo_db.log_activity(
-                user_id=session['user_id'],
-                action='admin_update_user',
-                details={'target_user': user_id, 'updates': updates}
-            )
-            self.send_json_response({'success': True, 'message': 'User updated'})
-        else:
-            self.send_json_response({'success': False, 'error': 'Update failed'}, 500)
+        try:
+            session = self.get_session()
+            if not session or not session.get('is_admin', False):
+                self.send_json_response({'error': 'Unauthorized'}, 403)
+                return
+            
+            data = self.get_post_data()
+            user_id = data.get('user_id')
+            updates = data.get('updates', {})
+            
+            if not user_id:
+                self.send_json_response({'error': 'user_id required'}, 400)
+                return
+            
+            # Remove sensitive fields that shouldn't be updated directly
+            forbidden = ['id', 'password_hash', 'created_at', 'email', 'username']
+            for field in forbidden:
+                updates.pop(field, None)
+            
+            if self.pg_db.update_user(user_id, updates):
+                self.mongo_db.log_activity(
+                    user_id=session['user_id'],
+                    action='admin_update_user',
+                    details={'target_user': user_id, 'updates': updates}
+                )
+                self.send_json_response({'success': True, 'message': 'User updated'})
+            else:
+                self.send_json_response({'success': False, 'error': 'Update failed'}, 500)
+        except Exception as e:
+            self.send_json_response({'error': str(e)}, 500)
     
     def api_get_stats(self):
         """Get system statistics for dashboard"""
-        session = self.get_session()
-        if not session:
-            self.send_json_response({'error': 'Unauthorized'}, 403)
-            return
-        
-        # Get user count
-        users = self.pg_db.get_all_users(limit=10000)
-        total_users = len(users)
-        active_users = sum(1 for u in users if u['is_active'])
-        admin_users = sum(1 for u in users if u['is_admin'])
-        
-        # Get recent activity count
-        recent_activities = list(self.mongo_db.db.activity_logs.find({'timestamp': {'$gte': datetime.datetime.utcnow() - datetime.timedelta(days=7)}}))
-        
-        stats = {
-            'total_users': total_users,
-            'active_users': active_users,
-            'admin_users': admin_users,
-            'activities_last_7_days': len(recent_activities),
-            'registration_rate': f"{(active_users/total_users*100):.1f}%" if total_users > 0 else "0%"
-        }
-        
-        self.send_json_response({'stats': stats})
-        
+        try:
+            session = self.get_session()
+            if not session:
+                self.send_json_response({'error': 'Unauthorized'}, 403)
+                return
+            
+            # Get user count
+            users = self.pg_db.get_all_users(limit=10000)
+            total_users = len(users)
+            active_users = sum(1 for u in users if u['is_active'])
+            admin_users = sum(1 for u in users if u['is_admin'])
+            
+            # Get recent activity count
+            seven_days_ago = datetime.datetime.utcnow() - datetime.timedelta(days=7)
+            recent_activities = list(self.mongo_db.db.activity_logs.find({
+                'timestamp': {'$gte': seven_days_ago}
+            }))
+            
+            stats = {
+                'total_users': total_users,
+                'active_users': active_users,
+                'admin_users': admin_users,
+                'activities_last_7_days': len(recent_activities),
+                'registration_rate': f"{(active_users/total_users*100):.1f}%" if total_users > 0 else "0%"
+            }
+            
+            self.send_json_response({'stats': stats})
+        except Exception as e:
+            self.send_json_response({'error': str(e)}, 500)
+
+
 def run_server():
     """Start the HTTP server"""
     with socketserver.TCPServer(("", PORT), RegistrationHandler) as httpd:
+        print(f"========================================")
+        print(f"Registration System Server Started")
         print(f"Server running at http://localhost:{PORT}")
-        print("Press Ctrl+C to stop")
+        print(f"========================================")
+        print(f"Press Ctrl+C to stop")
+        print(f"========================================")
         try:
             httpd.serve_forever()
         except KeyboardInterrupt:
-            print("\nServer stopped")
+            print("\n\nServer stopped gracefully")
 
 if __name__ == "__main__":
     run_server()
