@@ -82,9 +82,9 @@ class RegistrationHandler(http.server.SimpleHTTPRequestHandler):
             '/api/login': self.api_login,
             '/api/upload': self.api_upload,
             '/api/save-form-data': self.api_save_form_data,
-            '/api/check-availability': self.api_check_availability
+            '/api/check-availability': self.api_check_availability,
+            '/api/update-user': self.api_update_user      # NEW
         }
-        
         if path in routes:
             routes[path]()
         else:
