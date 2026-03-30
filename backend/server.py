@@ -59,7 +59,12 @@ class RegistrationHandler(http.server.SimpleHTTPRequestHandler):
             '/admin': self.serve_admin_page,
             '/verify-email': self.verify_email,
             '/logout': self.handle_logout,
-            '/api/session': self.get_session_info
+            '/api/session': self.get_session_info,
+            # Add these to the routes dictionary
+            '/api/users': self.api_get_users,              # NEW
+            '/api/user-activity': self.api_get_user_activity,  # NEW
+            '/api/form-submissions': self.api_get_form_submissions,  # NEW
+            '/api/stats': self.api_get_stats               # NEW
         }
         
         if path in routes:
