@@ -460,6 +460,126 @@ class RegistrationHandler(http.server.SimpleHTTPRequestHandler):
             'message': 'Form data saved successfully'
         })
 
+    def api_get_users(self):
+        """Admin endpoint to get all users"""
+        session = self.get_session()
+        if not session or not session.get('is_admin', False):
+            self.send_json_response({'error': 'Unauthorized'}, 403)
+            return
+        
+        limit = int(self.path.split('?')[1].split('=')[1]) if '?limit=' in self.path else 100
+        offset = int(self.path.split('?')[1].split('=')[2]) if '?offset=' in self.path else 0
+        
+        users = self.pg_db.get_all_users(limit, offset)
+        user_list = []
+        for user in users:
+            user_list.append({
+                'id': user['id'],
+                'email': user['email'],
+                'username': user['username'],
+                'full_name': user['full_name'],
+                'phone': user['phone'],
+                'created_at': str(user['created_at']),
+                'is_active': user['is_active'],
+                'is_admin': user['is_admin'],
+                'email_verified': user['email_verified']
+            })
+        
+        self.send_json_response({'users': user_list, 'count': len(user_list)})
+    
+    def api_get_user_activity(self):
+        """Get user activity logs from MongoDB"""
+        session = self.get_session()
+        if not session:
+            self.send_json_response({'error': 'Unauthorized'}, 403)
+            return
+        
+        user_id = session['user_id']
+        if 'admin' in self.path and not session.get('is_admin', False):
+            # Allow admin to see other users' logs
+            params = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+            user_id = int(params.get('user_id', [user_id])[0])
+        
+        logs = list(self.mongo_db.db.activity_logs.find({'user_id': user_id}).sort('timestamp', -1).limit(50))
+        for log in logs:
+            log['_id'] = str(log['_id'])
+            log['timestamp'] = str(log['timestamp'])
+        
+        self.send_json_response({'activity_logs': logs})
+    
+    def api_get_form_submissions(self):
+        """Get form submissions from MongoDB"""
+        session = self.get_session()
+        if not session:
+            self.send_json_response({'error': 'Unauthorized'}, 403)
+            return
+        
+        submission_type = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query).get('type', [None])[0]
+        query = {}
+        if submission_type:
+            query['submission_type'] = submission_type
+        if not session.get('is_admin', False):
+            query['user_id'] = session['user_id']
+        
+        submissions = list(self.mongo_db.db.form_submissions.find(query).sort('submitted_at', -1).limit(100))
+        for sub in submissions:
+            sub['_id'] = str(sub['_id'])
+            sub['submitted_at'] = str(sub['submitted_at'])
+        
+        self.send_json_response({'submissions': submissions})
+    
+    def api_update_user(self):
+        """Admin endpoint to update user"""
+        session = self.get_session()
+        if not session or not session.get('is_admin', False):
+            self.send_json_response({'error': 'Unauthorized'}, 403)
+            return
+        
+        data = self.get_post_data()
+        user_id = data.get('user_id')
+        updates = data.get('updates', {})
+        
+        # Remove sensitive fields that shouldn't be updated directly
+        forbidden = ['id', 'password_hash', 'created_at']
+        for field in forbidden:
+            updates.pop(field, None)
+        
+        if self.pg_db.update_user(user_id, updates):
+            self.mongo_db.log_activity(
+                user_id=session['user_id'],
+                action='admin_update_user',
+                details={'target_user': user_id, 'updates': updates}
+            )
+            self.send_json_response({'success': True, 'message': 'User updated'})
+        else:
+            self.send_json_response({'success': False, 'error': 'Update failed'}, 500)
+    
+    def api_get_stats(self):
+        """Get system statistics for dashboard"""
+        session = self.get_session()
+        if not session:
+            self.send_json_response({'error': 'Unauthorized'}, 403)
+            return
+        
+        # Get user count
+        users = self.pg_db.get_all_users(limit=10000)
+        total_users = len(users)
+        active_users = sum(1 for u in users if u['is_active'])
+        admin_users = sum(1 for u in users if u['is_admin'])
+        
+        # Get recent activity count
+        recent_activities = list(self.mongo_db.db.activity_logs.find({'timestamp': {'$gte': datetime.datetime.utcnow() - datetime.timedelta(days=7)}}))
+        
+        stats = {
+            'total_users': total_users,
+            'active_users': active_users,
+            'admin_users': admin_users,
+            'activities_last_7_days': len(recent_activities),
+            'registration_rate': f"{(active_users/total_users*100):.1f}%" if total_users > 0 else "0%"
+        }
+        
+        self.send_json_response({'stats': stats})
+        
 def run_server():
     """Start the HTTP server"""
     with socketserver.TCPServer(("", PORT), RegistrationHandler) as httpd:
