@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - Registration System</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <style>
+        .dashboard-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 2px solid #e0e0e0;
+        }
+        .welcome-badge {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 10px;
+        }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 40px;
+        }
+        .stat-card {
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+        .stat-number {
+            font-size: 36px;
+            font-weight: bold;
+            color: #667eea;
+        }
+        .stat-label {
+            color: #666;
+            margin-top: 10px;
+        }
+        .section-card {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 30px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .section-title {
+            font-size: 20px;
+            margin-bottom: 15px;
+            color: #333;
+            border-left: 4px solid #667eea;
+            padding-left: 15px;
+        }
+        .activity-item {
+            padding: 10px;
+            border-bottom: 1px solid #f0f0f0;
+            display: flex;
+            justify-content: space-between;
+        }
+        .activity-action {
+            font-weight: 600;
+            color: #667eea;
+        }
+        .activity-time {
+            color: #999;
+            font-size: 12px;
+        }
+        .btn-logout {
+            background: #e74c3c;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+        }
+        .btn-logout:hover {
+            background: #c0392b;
+        }
+        .admin-badge {
+            background: #e67e22;
+            color: white;
+            padding: 5px 10px;
+            border-radius: 5px;
+            font-size: 12px;
+            margin-left: 10px;
+        }
+        .nav-links {
+            display: flex;
+            gap: 15px;
+        }
+        .nav-link {
+            color: #667eea;
+            text-decoration: none;
+            padding: 8px 15px;
+            border-radius: 8px;
+            transition: background 0.3s;
+        }
+        .nav-link:hover {
+            background: #f0f0ff;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="form-container">
+            <div class="dashboard-header">
+                <div>
+                    <h1>User Dashboard</h1>
+                    <div id="userInfo"></div>
+                </div>
+                <div class="nav-links">
+                    <a href="/" class="nav-link">Home</a>
+                    <a href="/admin" id="adminLink" class="nav-link" style="display:none;">Admin Panel</a>
+                    <button class="btn-logout" onclick="logout()">Logout</button>
+                </div>
+            </div>
+            
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-number" id="totalUsers">-</div>
+                    <div class="stat-label">Total Users</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number" id="activeUsers">-</div>
+                    <div class="stat-label">Active Users</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number" id="activitiesCount">-</div>
+                    <div class="stat-label">Activities (Last 7 days)</div>
+                </div>
+            </div>
+            
+            <div class="section-card">
+                <div class="section-title">📋 Your Profile Information</div>
+                <div id="profileInfo"></div>
+            </div>
+            
+            <div class="section-card">
+                <div class="section-title">📜 Recent Activity Log</div>
+                <div id="activityLog"></div>
+            </div>
+            
+            <div class="section-card">
+                <div class="section-title">📝 Your Form Submissions</div>
+                <div id="submissionsList"></div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        async function loadDashboard() {
+            try {
+                // Check session
+                const sessionRes = await fetch('/api/session');
+                const session = await sessionRes.json();
+                
+                if (!session.authenticated) {
+                    window.location.href = '/';
+                    return;
+                }
+                
+                // Display user info
+                const userInfoDiv = document.getElementById('userInfo');
+                userInfoDiv.innerHTML = `
+                    <p>Welcome, <strong>${session.user.username}</strong> (${session.user.email})</p>
+                    ${session.user.is_admin ? '<span class="admin-badge">Administrator</span>' : ''}
+                `;
+                
+                // Show admin link if admin
+                if (session.user.is_admin) {
+                    document.getElementById('adminLink').style.display = 'inline-block';
+                }
+                
+                // Load stats
+                const statsRes = await fetch('/api/stats');
+                const stats = await statsRes.json();
+                document.getElementById('totalUsers').textContent = stats.stats.total_users;
+                document.getElementById('activeUsers').textContent = stats.stats.active_users;
+                document.getElementById('activitiesCount').textContent = stats.stats.activities_last_7_days;
+                
+                // Load profile info
+                const profileRes = await fetch('/api/users?limit=1');
+                // For demo, we'll fetch current user data from session
+                const profileHtml = `
+                    <p><strong>Username:</strong> ${session.user.username}</p>
+                    <p><strong>Email:</strong> ${session.user.email}</p>
+                    <p><strong>Admin:</strong> ${session.user.is_admin ? 'Yes' : 'No'}</p>
+                `;
+                document.getElementById('profileInfo').innerHTML = profileHtml;
+                
+                // Load activity log
+                const activityRes = await fetch('/api/user-activity');
+                const activityData = await activityRes.json();
+                const activityLogDiv = document.getElementById('activityLog');
+                if (activityData.activity_logs && activityData.activity_logs.length > 0) {
+                    activityLogDiv.innerHTML = activityData.activity_logs.map(log => `
+                        <div class="activity-item">
+                            <span class="activity-action">${log.action}</span>
+                            <span class="activity-time">${new Date(log.timestamp).toLocaleString()}</span>
+                        </div>
+                    `).join('');
+                } else {
+                    activityLogDiv.innerHTML = '<p>No recent activity.</p>';
+                }
+                
+                // Load form submissions
+                const submissionsRes = await fetch('/api/form-submissions');
+                const submissionsData = await submissionsRes.json();
+                const submissionsDiv = document.getElementById('submissionsList');
+                if (submissionsData.submissions && submissionsData.submissions.length > 0) {
+                    submissionsDiv.innerHTML = submissionsData.submissions.map(sub => `
+                        <div class="activity-item">
+                            <span class="activity-action">${sub.submission_type}</span>
+                            <span class="activity-time">${new Date(sub.submitted_at).toLocaleString()}</span>
+                        </div>
+                    `).join('');
+                } else {
+                    submissionsDiv.innerHTML = '<p>No form submissions found.</p>';
+                }
+                
+            } catch (error) {
+                console.error('Failed to load dashboard:', error);
+                document.getElementById('activityLog').innerHTML = '<p style="color:red;">Failed to load data</p>';
+            }
+        }
+        
+        async function logout() {
+            window.location.href = '/logout';
+        }
+        
+        document.addEventListener('DOMContentLoaded', loadDashboard);
+    </script>
+</body>
+</html>
