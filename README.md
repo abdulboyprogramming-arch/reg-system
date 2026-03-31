@@ -232,82 +232,93 @@ Open your browser and navigate to:
 http://localhost:8080
 ```
 
-Default Pages
+## 🗺️ Default Pages
 
-URL Description Access
-/ Landing page (redirects to dashboard if logged in) Public
-/register Registration form Public
-/login.html Login page Public
-/dashboard User dashboard Authenticated
-/admin Admin panel Admin only
+| URL | Description | Access |
+|-----|-------------|--------|
+| `/` | Landing page (redirects to dashboard if logged in) | Public |
+| `/register` | Registration form | Public |
+| `/login.html` | Login page | Public |
+| `/dashboard` | User dashboard | Authenticated |
+| `/admin` | Admin panel | Admin only |
 
-📡 API Endpoints
+---
 
-Public Endpoints
+## 📡 API Endpoints
 
-Method Endpoint Description Request Body
-POST /api/register Register new user {email, username, password, confirm_password, ...}
-POST /api/login User login {username_or_email, password}
-POST /api/check-availability Check username/email availability {field, value}
-GET /api/session Get current session info -
+### Public Endpoints
 
-Authenticated Endpoints
+| Method | Endpoint | Description | Request Body |
+|--------|----------|-------------|--------------|
+| POST | `/api/register` | Register new user | `{email, username, password, confirm_password, ...}` |
+| POST | `/api/login` | User login | `{username_or_email, password}` |
+| POST | `/api/check-availability` | Check username/email availability | `{field, value}` |
+| GET | `/api/session` | Get current session info | - |
 
-Method Endpoint Description Access
-POST /api/upload Upload files Authenticated
-POST /api/save-form-data Save custom form data Authenticated
-GET /api/user-activity Get user activity logs Authenticated
-GET /api/form-submissions Get user form submissions Authenticated
-GET /api/stats Get user statistics Authenticated
+### Authenticated Endpoints
 
-Admin Endpoints
+| Method | Endpoint | Description | Access |
+|--------|----------|-------------|--------|
+| POST | `/api/upload` | Upload files | Authenticated |
+| POST | `/api/save-form-data` | Save custom form data | Authenticated |
+| GET | `/api/user-activity` | Get user activity logs | Authenticated |
+| GET | `/api/form-submissions` | Get user form submissions | Authenticated |
+| GET | `/api/stats` | Get user statistics | Authenticated |
 
-Method Endpoint Description Access
-GET /api/users List all users Admin only
-POST /api/update-user Update user details Admin only
-GET /api/user-activity?user_id=X View specific user activity Admin only
+### Admin Endpoints
 
-🗄️ Database Schema
+| Method | Endpoint | Description | Access |
+|--------|----------|-------------|--------|
+| GET | `/api/users` | List all users | Admin only |
+| POST | `/api/update-user` | Update user details | Admin only |
+| GET | `/api/user-activity?user_id=X` | View specific user activity | Admin only |
 
-PostgreSQL Tables
+---
 
-users Table
+## 🗄️ Database Schema
 
-Column Type Description
-id SERIAL Primary key
-email VARCHAR(255) Unique email address
-username VARCHAR(100) Unique username
-password_hash VARCHAR(255) Hashed password
-full_name VARCHAR(255) User's full name
-phone VARCHAR(50) Phone number
-date_of_birth DATE Date of birth
-gender VARCHAR(20) Gender selection
-country VARCHAR(100) Country of residence
-city VARCHAR(100) City
-postal_code VARCHAR(20) Postal/ZIP code
-created_at TIMESTAMP Account creation time
-updated_at TIMESTAMP Last update time
-is_active BOOLEAN Account status
-is_admin BOOLEAN Admin privileges
-email_verified BOOLEAN Email verification status
+### PostgreSQL Tables
 
-user_metadata Table
+#### `users` Table
 
-Column Type Description
-user_id INTEGER References users(id)
-metadata JSONB Flexible user metadata
-preferences JSONB User preferences
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | SERIAL | Primary key |
+| `email` | VARCHAR(255) | Unique email address |
+| `username` | VARCHAR(100) | Unique username |
+| `password_hash` | VARCHAR(255) | Hashed password |
+| `full_name` | VARCHAR(255) | User's full name |
+| `phone` | VARCHAR(50) | Phone number |
+| `date_of_birth` | DATE | Date of birth |
+| `gender` | VARCHAR(20) | Gender selection |
+| `country` | VARCHAR(100) | Country of residence |
+| `city` | VARCHAR(100) | City |
+| `postal_code` | VARCHAR(20) | Postal/ZIP code |
+| `created_at` | TIMESTAMP | Account creation time |
+| `updated_at` | TIMESTAMP | Last update time |
+| `is_active` | BOOLEAN | Account status |
+| `is_admin` | BOOLEAN | Admin privileges |
+| `email_verified` | BOOLEAN | Email verification status |
 
-email_tokens Table
+#### `user_metadata` Table
 
-Column Type Description
-id SERIAL Primary key
-user_id INTEGER References users(id)
-token VARCHAR(255) Unique verification token
-expires_at TIMESTAMP Token expiration
-used BOOLEAN Token usage status
+| Column | Type | Description |
+|--------|------|-------------|
+| `user_id` | INTEGER | References users(id) |
+| `metadata` | JSONB | Flexible user metadata |
+| `preferences` | JSONB | User preferences |
 
-MongoDB Collections
+#### `email_tokens` Table
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | SERIAL | Primary key |
+| `user_id` | INTEGER | References users(id) |
+| `token` | VARCHAR(255) | Unique verification token |
+| `expires_at` | TIMESTAMP | Token expiration |
+| `used` | BOOLEAN | Token usage status |
+
+## MongoDB Collections
 
 activity_logs
 
