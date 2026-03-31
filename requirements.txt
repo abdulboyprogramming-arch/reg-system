@@ -1,2 +1,3 @@
 psycopg2-binary
-pymongos
+pymongo
+python-dotenv

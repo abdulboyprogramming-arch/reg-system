@@ -1,22 +1,33 @@
 import psycopg2
 from psycopg2 import sql, extras
 import json
+import os
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 class PostgresDB:
-    def __init__(self, dbname="reg_system", user="postgres", password="postgres", host="localhost", port=5432):
+    def __init__(self):
+        # Read database configuration from environment variables
         self.conn_params = {
-            "dbname": dbname,
-            "user": user,
-            "password": password,
-            "host": host,
-            "port": port
+            "dbname": os.getenv('DB_NAME', 'reg_system'),
+            "user": os.getenv('DB_USER', 'postgres'),
+            "password": os.getenv('DB_PASSWORD', ''),
+            "host": os.getenv('DB_HOST', 'localhost'),
+            "port": int(os.getenv('DB_PORT', 5432))
         }
         self.conn = None
         self.init_db()
 
     def connect(self):
         if self.conn is None or self.conn.closed:
-            self.conn = psycopg2.connect(**self.conn_params)
+            try:
+                self.conn = psycopg2.connect(**self.conn_params)
+            except psycopg2.OperationalError as e:
+                print(f"❌ Database connection failed: {e}")
+                print("Please check your database credentials in .env file")
+                raise
         return self.conn
 
     def init_db(self):
@@ -66,19 +77,26 @@ class PostgresDB:
         
         conn.commit()
         cur.close()
+        print("✅ PostgreSQL database initialized successfully")
 
     def execute_query(self, query, params=None, fetch_one=False, fetch_all=False):
         conn = self.connect()
         cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
-        cur.execute(query, params or ())
-        result = None
-        if fetch_one:
-            result = cur.fetchone()
-        elif fetch_all:
-            result = cur.fetchall()
-        conn.commit()
-        cur.close()
-        return result
+        try:
+            cur.execute(query, params or ())
+            result = None
+            if fetch_one:
+                result = cur.fetchone()
+            elif fetch_all:
+                result = cur.fetchall()
+            conn.commit()
+            return result
+        except Exception as e:
+            conn.rollback()
+            print(f"❌ Query execution failed: {e}")
+            raise
+        finally:
+            cur.close()
 
     def insert_user(self, user_data):
         query = """
@@ -125,6 +143,9 @@ class PostgresDB:
     
     def update_user(self, user_id, updates):
         """Update user fields dynamically"""
+        if not updates:
+            return False
+        
         set_clause = ", ".join([f"{k} = %s" for k in updates.keys()])
         query = f"UPDATE users SET {set_clause}, updated_at = CURRENT_TIMESTAMP WHERE id = %s RETURNING id"
         params = list(updates.values()) + [user_id]
@@ -146,8 +167,7 @@ class PostgresDB:
         """Update user metadata JSONB"""
         query = """
             UPDATE user_metadata 
-            SET metadata = metadata || %s::jsonb, 
-                updated_at = CURRENT_TIMESTAMP 
+            SET metadata = metadata || %s::jsonb
             WHERE user_id = %s
         """
         return self.execute_query(query, (json.dumps(metadata_updates), user_id))

@@ -11,6 +11,10 @@ import datetime
 import re
 import cgi
 import io
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 # Add backend directory to path for imports
 sys.path.insert(0, os.path.dirname(__file__))
@@ -22,10 +26,17 @@ from db_mongo import MongoDB
 pg_db = PostgresDB()
 mongo_db = MongoDB()
 
-# Configuration
-PORT = 8080
-SESSION_TIMEOUT_HOURS = 24
+# Configuration from environment variables
+PORT = int(os.getenv('PORT', 8080))
+SESSION_TIMEOUT_HOURS = int(os.getenv('SESSION_TIMEOUT_HOURS', 24))
+DEBUG = os.getenv('DEBUG', 'False').lower() == 'true'
+
+# File upload configuration
 UPLOAD_DIR = os.path.join(os.path.dirname(__file__), '..', 'uploads')
+MAX_FILE_SIZE = int(os.getenv('MAX_FILE_SIZE', 5 * 1024 * 1024))  # 5MB default
+ALLOWED_EXTENSIONS = os.getenv('ALLOWED_EXTENSIONS', 'jpg,jpeg,png,gif,pdf,doc,docx').split(',')
+
+# Create upload directory if it doesn't exist
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 class RegistrationHandler(http.server.SimpleHTTPRequestHandler):
@@ -35,6 +46,17 @@ class RegistrationHandler(http.server.SimpleHTTPRequestHandler):
         self.pg_db = pg_db
         self.mongo_db = mongo_db
         super().__init__(*args, **kwargs)
+    
+    def log_message(self, format, *args):
+        """Override log_message to control logging output"""
+        if DEBUG:
+            super().log_message(format, *args)
+        else:
+            # Only log errors in production
+            if 'code 404' not in format and 'code 500' not in format:
+                pass
+            else:
+                super().log_message(format, *args)
     
     def do_GET(self):
         """Handle GET requests"""
@@ -88,6 +110,11 @@ class RegistrationHandler(http.server.SimpleHTTPRequestHandler):
     def serve_static_file(self, filepath):
         """Serve static files safely"""
         try:
+            # Security: Prevent directory traversal
+            if '..' in filepath or filepath.startswith('/'):
+                self.send_404()
+                return
+            
             full_path = os.path.join(os.path.dirname(__file__), '..', filepath)
             if os.path.exists(full_path) and not os.path.isdir(full_path):
                 self.send_response(200)
@@ -105,7 +132,9 @@ class RegistrationHandler(http.server.SimpleHTTPRequestHandler):
             else:
                 self.send_404()
         except Exception as e:
-            self.send_error(500, f"Error serving file: {str(e)}")
+            if DEBUG:
+                print(f"Error serving static file: {e}")
+            self.send_error(500, "Error serving file")
     
     def serve_index(self):
         """Serve index/home page"""
@@ -148,6 +177,11 @@ class RegistrationHandler(http.server.SimpleHTTPRequestHandler):
     def serve_html_file(self, filename):
         """Serve HTML file from frontend directory"""
         try:
+            # Security: Prevent directory traversal
+            if '..' in filename:
+                self.send_404()
+                return
+                
             filepath = os.path.join(os.path.dirname(__file__), '..', 'frontend', filename)
             with open(filepath, 'rb') as f:
                 content = f.read()
@@ -156,6 +190,8 @@ class RegistrationHandler(http.server.SimpleHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(content)
         except Exception as e:
+            if DEBUG:
+                print(f"Error serving HTML file: {e}")
             self.send_error(404, f"File not found: {filename}")
     
     def send_404(self):
@@ -271,6 +307,25 @@ class RegistrationHandler(http.server.SimpleHTTPRequestHandler):
         pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
         return re.match(pattern, email) is not None
     
+    def validate_file(self, filename, content):
+        """Validate uploaded file"""
+        # Check extension
+        ext = filename.split('.')[-1].lower() if '.' in filename else ''
+        if ext not in ALLOWED_EXTENSIONS:
+            return False, f"File type '{ext}' not allowed. Allowed: {', '.join(ALLOWED_EXTENSIONS)}"
+        
+        # Check size
+        if len(content) > MAX_FILE_SIZE:
+            return False, f"File too large. Max {MAX_FILE_SIZE // (1024*1024)}MB"
+        
+        # Basic security check for malicious content
+        dangerous_patterns = [b'<?php', b'<script', b'javascript:', b'vbscript:', b'onload=']
+        for pattern in dangerous_patterns:
+            if pattern in content.lower():
+                return False, "File contains potentially malicious content"
+        
+        return True, "OK"
+    
     def api_check_availability(self):
         """Check if username or email is available"""
         data = self.get_post_data()
@@ -372,8 +427,9 @@ class RegistrationHandler(http.server.SimpleHTTPRequestHandler):
             })
             
         except Exception as e:
-            import traceback
-            traceback.print_exc()
+            if DEBUG:
+                import traceback
+                traceback.print_exc()
             self.send_json_response({'success': False, 'error': str(e)}, 500)
     
     def api_login(self):
@@ -413,10 +469,13 @@ class RegistrationHandler(http.server.SimpleHTTPRequestHandler):
                 'redirect': '/dashboard'
             })
         except Exception as e:
+            if DEBUG:
+                import traceback
+                traceback.print_exc()
             self.send_json_response({'success': False, 'error': str(e)}, 500)
     
     def api_upload(self):
-        """Handle file uploads"""
+        """Handle file uploads with validation"""
         try:
             content_type = self.headers.get('Content-Type', '')
             if 'multipart/form-data' not in content_type:
@@ -437,6 +496,12 @@ class RegistrationHandler(http.server.SimpleHTTPRequestHandler):
             for key in form.keys():
                 field = form[key]
                 if field.filename:
+                    # Validate file
+                    is_valid, error_msg = self.validate_file(field.filename, field.value)
+                    if not is_valid:
+                        self.send_json_response({'success': False, 'error': error_msg}, 400)
+                        return
+                    
                     # Save file
                     filename = f"{secrets.token_hex(8)}_{field.filename}"
                     filepath = os.path.join(UPLOAD_DIR, filename)
@@ -464,8 +529,12 @@ class RegistrationHandler(http.server.SimpleHTTPRequestHandler):
             })
             
         except Exception as e:
+            if DEBUG:
+                import traceback
+                traceback.print_exc()
             self.send_json_response({'success': False, 'error': str(e)}, 500)
     
+    # ... (rest of the API methods remain the same)
     def api_save_form_data(self):
         """Save arbitrary form data to MongoDB"""
         try:
@@ -484,6 +553,9 @@ class RegistrationHandler(http.server.SimpleHTTPRequestHandler):
                 'message': 'Form data saved successfully'
             })
         except Exception as e:
+            if DEBUG:
+                import traceback
+                traceback.print_exc()
             self.send_json_response({'success': False, 'error': str(e)}, 500)
     
     def api_get_users(self):
@@ -516,6 +588,9 @@ class RegistrationHandler(http.server.SimpleHTTPRequestHandler):
             
             self.send_json_response({'users': user_list, 'count': len(user_list)})
         except Exception as e:
+            if DEBUG:
+                import traceback
+                traceback.print_exc()
             self.send_json_response({'error': str(e)}, 500)
     
     def api_get_user_activity(self):
@@ -533,13 +608,16 @@ class RegistrationHandler(http.server.SimpleHTTPRequestHandler):
             if session.get('is_admin', False) and 'user_id' in query_params:
                 user_id = int(query_params['user_id'][0])
             
-            logs = list(self.mongo_db.db.activity_logs.find({'user_id': user_id}).sort('timestamp', -1).limit(50))
+            logs = self.mongo_db.get_user_activity(user_id, limit=50)
             for log in logs:
                 log['_id'] = str(log['_id'])
                 log['timestamp'] = str(log['timestamp'])
             
             self.send_json_response({'activity_logs': logs})
         except Exception as e:
+            if DEBUG:
+                import traceback
+                traceback.print_exc()
             self.send_json_response({'error': str(e)}, 500)
     
     def api_get_form_submissions(self):
@@ -566,6 +644,9 @@ class RegistrationHandler(http.server.SimpleHTTPRequestHandler):
             
             self.send_json_response({'submissions': submissions})
         except Exception as e:
+            if DEBUG:
+                import traceback
+                traceback.print_exc()
             self.send_json_response({'error': str(e)}, 500)
     
     def api_update_user(self):
@@ -599,6 +680,9 @@ class RegistrationHandler(http.server.SimpleHTTPRequestHandler):
             else:
                 self.send_json_response({'success': False, 'error': 'Update failed'}, 500)
         except Exception as e:
+            if DEBUG:
+                import traceback
+                traceback.print_exc()
             self.send_json_response({'error': str(e)}, 500)
     
     def api_get_stats(self):
@@ -631,6 +715,9 @@ class RegistrationHandler(http.server.SimpleHTTPRequestHandler):
             
             self.send_json_response({'stats': stats})
         except Exception as e:
+            if DEBUG:
+                import traceback
+                traceback.print_exc()
             self.send_json_response({'error': str(e)}, 500)
 
 
@@ -640,6 +727,7 @@ def run_server():
         print(f"========================================")
         print(f"Registration System Server Started")
         print(f"Server running at http://localhost:{PORT}")
+        print(f"Debug Mode: {DEBUG}")
         print(f"========================================")
         print(f"Press Ctrl+C to stop")
         print(f"========================================")
