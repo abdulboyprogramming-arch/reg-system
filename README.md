@@ -1,4 +1,4 @@
-# 📝 Registration System
+# Registration System
 
 A complete, production-ready registration system built from scratch with Python, PostgreSQL, and MongoDB. No frontend frameworks, no Python web frameworks - just pure code.
 
@@ -7,29 +7,29 @@ A complete, production-ready registration system built from scratch with Python,
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-13+-336791.svg)](https://www.postgresql.org/)
 [![MongoDB](https://img.shields.io/badge/MongoDB-4.4+-47A248.svg)](https://www.mongodb.com/)
 
-## 🚀 Features
+## Features
 
 ### Frontend
-- 📝 **Complete Registration Form** with 20+ field types:
+- **Complete Registration Form** with 20+ field types:
   - Text, Email, Password, Telephone
   - Date picker, Country dropdown, City input
   - Radio buttons (Gender, Contact method)
   - Checkboxes (Interests, Terms & Conditions)
   - File uploads (Profile picture, Resume, Multiple files)
   - Textarea (Bio), URL (Website), Social media handles
-- ✅ **Real-time validation** and username/email availability checking
-- 🔐 **User login** with secure session management
-- 📊 **User dashboard** with activity feed and statistics
-- 👑 **Admin panel** with complete user management
-- 📱 **Fully responsive design** for all devices
+- **Real-time validation** and username/email availability checking
+- **User login** with secure session management
+- **User dashboard** with activity feed and statistics
+- **Admin panel** with complete user management
+- **Fully responsive design** for all devices
 
 ### Backend
-- 🚀 **Pure Python HTTP server** (no Flask/Django dependencies)
-- 🔒 **Secure session-based authentication** with HTTP-only cookies
-- 📁 **File upload handling** with validation and secure storage
-- 🔑 **Password hashing** with SHA-256 (upgradable to bcrypt)
-- 📝 **Comprehensive activity logging** for audit trails
-- 🎯 **RESTful API endpoints** for all operations
+- **Pure Python HTTP server** (no Flask/Django dependencies)
+- **Secure session-based authentication** with HTTP-only cookies
+- **File upload handling** with validation and secure storage
+- **Password hashing** with SHA-256 (upgradable to bcrypt)
+- **Comprehensive activity logging** for audit trails
+- **RESTful API endpoints** for all operations
 
 ### Databases
 - **PostgreSQL**: Structured user data with JSONB support for flexible metadata
